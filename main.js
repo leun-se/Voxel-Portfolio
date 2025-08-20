@@ -10,6 +10,12 @@ const sizes = {
 };
 
 // init
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const targetNames = [];
+const selectableObjects = [];
+let lastHovered = null;
+
 const canvas = document.getElementById("experience-canvas");
 const aspect = sizes.width / sizes.height;
 const camera = new THREE.OrthographicCamera( -aspect * 50, aspect * 50, 50, -50, 1, 1500);
@@ -17,11 +23,26 @@ const scene = new THREE.Scene();
 
 const loader = new GLTFLoader();
 
+//loading model
 loader.load( "./first4jsproject.glb", function ( glb ) {
     glb.scene.traverse(child=>{
         if(child.isMesh){
             child.castShadow = true;
             child.receiveShadow = true;
+            console.log(child);
+
+            if(child.material && targetNames.includes(child.material.name)){
+                selectableObjects.push(child);
+                console.log("Selectable:", child.name, child.material.name);
+            }
+            //change pot material
+            if (child.material.name === "Material.028" || child.material.name === "Material.025"){
+                child.material.color.setHex(0xEC5800);
+            }
+            //change path material
+            if (child.material && child.material.name === "Material.022") {
+                child.material.color.setHex(0xD68E52);
+            }
         }
     })
     scene.add( glb.scene );
@@ -31,6 +52,8 @@ loader.load( "./first4jsproject.glb", function ( glb ) {
     console.error( error );
 } 
 );
+
+//sun
 const sun = new THREE.DirectionalLight( 0xFFE484, 6);
 sun.castShadow = true;
 sun.position.set(35,75,15);
@@ -42,24 +65,31 @@ sun.shadow.camera.right = 75;
 sun.shadow.camera.top = 75;
 sun.shadow.camera.bottom = -75;
 sun.shadow.normalBias = 0.05;
-//increase softness of light
 sun.shadow.radius = 30;
 scene.add( sun );
 
+
+//hemisphere light/helper
+const HemisphereLight = new THREE.HemisphereLight( 0xffffbb, 0x0099FF, 3 );
+scene.add( HemisphereLight );
+// const HemisphereLightHelper = new THREE.HemisphereLightHelper( HemisphereLight, 5 );
+// scene.add( HemisphereLightHelper );
+
 const shadowHelper = new THREE.CameraHelper( sun.shadow.camera );
 scene.add( shadowHelper );
-const helper = new THREE.DirectionalLightHelper( sun, 5 );
-scene.add( helper );
+//const helper = new THREE.DirectionalLightHelper( sun, 5 );
+//scene.add( helper );
 
-const light = new THREE.AmbientLight( 0x87CEEB, 2 ); // soft white light
-scene.add( light );
+// const light = new THREE.AmbientLight( 0x87CEEB, 0 ); // soft white light
+// scene.add( light );
 
 const renderer = new THREE.WebGLRenderer( { canvas: canvas, antialias: true } );
 renderer.setSize( sizes.width, sizes.height );
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.shadowMap.enabled = true;
-
+renderer.toneMapping = THREE.CineonToneMapping;
+renderer.toneMappingExposure = 1.2;
 renderer.setAnimationLoop( animate );
 
 
@@ -72,7 +102,7 @@ controls.update();
 
 
 
-function handleResize(){
+function onResize(){
     sizes.width = window.innerWidth;
     sizes.height = window.innerHeight;
     const aspect = sizes.width/sizes.height;
@@ -85,11 +115,45 @@ function handleResize(){
     renderer.setSize(sizes.width, sizes.height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 }
+window.addEventListener("resize", onResize);
 
-window.addEventListener("resize", handleResize);
+function onPointerMove( event ) {
+
+	// calculate pointer position in normalized device coordinates
+	// (-1 to +1) for both components
+
+	pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+	pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+}
+window.addEventListener("mousemove", onPointerMove);
 
 // animation
-function animate( time ) {
+function animate() {
+    // update the picking ray with the camera and pointer position
+	raycaster.setFromCamera( pointer, camera );
+
+	// calculate objects intersecting the picking ray
+	const intersects = raycaster.intersectObjects(selectableObjects, true );
+
+    if (intersects.length > 0) {
+        const hovered = intersects[0].object;
+
+        if(lastHovered && lastHovered !== hovered) {
+            lastHovered.material.color.copy(lastHovered.userData.originalColor);
+        }
+
+        if(!hovered.userData.originalColor){
+            hovered.userData.originalColor = hovered.material.color.clone();
+        }
+
+        hovered.material.color.set(0xff0000);
+        lastHovered = hovered;
+
+    } else if (lastHovered) {
+        lastHovered.material.color.copy(lastHovered.userData.originalColor);
+        lastHovered = null;
+    }
     controls.update();
     //console.log(camera.position);
 	renderer.render( scene, camera );
