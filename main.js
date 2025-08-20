@@ -12,10 +12,17 @@ const sizes = {
 // init
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
-const targetNames = [];
-const selectableObjects = [];
-let lastHovered = null;
-
+const intersectObjects = [];
+const intersectObjectsNames = [
+    "Cube072",
+    "Cube073",
+    "Plane138",
+    "Cube074",
+    "Cube077",
+    "Plane139",
+    "Plane140",
+    "Cube076",
+];
 const canvas = document.getElementById("experience-canvas");
 const aspect = sizes.width / sizes.height;
 const camera = new THREE.OrthographicCamera( -aspect * 50, aspect * 50, 50, -50, 1, 1500);
@@ -25,16 +32,11 @@ const loader = new GLTFLoader();
 
 //loading model
 loader.load( "./first4jsproject.glb", function ( glb ) {
-    glb.scene.traverse(child=>{
+    glb.scene.traverse((child)=>{
         if(child.isMesh){
             child.castShadow = true;
             child.receiveShadow = true;
-            console.log(child);
-
-            if(child.material && targetNames.includes(child.material.name)){
-                selectableObjects.push(child);
-                console.log("Selectable:", child.name, child.material.name);
-            }
+            console.log(child.name);
             //change pot material
             if (child.material.name === "Material.028" || child.material.name === "Material.025"){
                 child.material.color.setHex(0xEC5800);
@@ -43,6 +45,9 @@ loader.load( "./first4jsproject.glb", function ( glb ) {
             if (child.material && child.material.name === "Material.022") {
                 child.material.color.setHex(0xD68E52);
             }
+        }
+        if(intersectObjectsNames.includes(child.name)){
+            intersectObjects.push(child);
         }
     })
     scene.add( glb.scene );
@@ -115,7 +120,6 @@ function onResize(){
     renderer.setSize(sizes.width, sizes.height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 }
-window.addEventListener("resize", onResize);
 
 function onPointerMove( event ) {
 
@@ -126,37 +130,23 @@ function onPointerMove( event ) {
 	pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 
 }
-window.addEventListener("mousemove", onPointerMove);
+window.addEventListener("resize", onResize);
+window.addEventListener("pointermove", onPointerMove);
 
 // animation
 function animate() {
+
     // update the picking ray with the camera and pointer position
 	raycaster.setFromCamera( pointer, camera );
 
 	// calculate objects intersecting the picking ray
-	const intersects = raycaster.intersectObjects(selectableObjects, true );
+	const intersects = raycaster.intersectObjects( intersectObjects);
 
-    if (intersects.length > 0) {
-        const hovered = intersects[0].object;
-
-        if(lastHovered && lastHovered !== hovered) {
-            lastHovered.material.color.copy(lastHovered.userData.originalColor);
-        }
-
-        if(!hovered.userData.originalColor){
-            hovered.userData.originalColor = hovered.material.color.clone();
-        }
-
-        hovered.material.color.set(0xff0000);
-        lastHovered = hovered;
-
-    } else if (lastHovered) {
-        lastHovered.material.color.copy(lastHovered.userData.originalColor);
-        lastHovered = null;
-    }
-    controls.update();
-    //console.log(camera.position);
+	for ( let i = 0; i < intersects.length; i ++ ) {
+		intersects[ i ].object.material.color.set( 0xff0000 );
+        console.log(intersects);
+	}
 	renderer.render( scene, camera );
-
 }
 
+renderer.setAnimationLoop(animate);
