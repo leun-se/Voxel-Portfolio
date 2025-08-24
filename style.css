@@ -2,6 +2,7 @@
     padding: 0;
     margin: 0;
     box-sizing: border-box;
+    font-family: "Pixelify Sans", sans-serif;
 }
 
 #experience{
@@ -16,4 +17,14 @@
 #experience-canvas {
     width: 100%;
     height: 100%;
+}
+
+.modal {
+    z-index: 999;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    max-width: 700px;
 }
