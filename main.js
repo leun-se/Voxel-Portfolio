@@ -13,17 +13,67 @@ const sizes = {
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
+
+let character = {
+    instance: null,
+    moveDistance: 3,
+}
+
+const modalContent = {
+    "KennyJamSign002":{
+        title: "Project One",
+        content: "This is project one, hello world",
+        link: "https://www.example.com/",
+    },
+    "task_tide_sign001":{
+        title: "Project Two",
+        content: "This is project two, hello world",
+        link: "https://www.example.com/",
+    },
+    "art_sign001":{
+        title: "Project Three",
+        content: "This is project three, hello world",
+        link: "https://www.example.com/",
+    },
+}
+const modal = document.querySelector(".modal");
+const modalTitle = document.querySelector(".modal-title");
+const modalProjectDescription = document.querySelector(".modal-project-description");
+
+const modalExitButton = document.querySelector(".modal-exit-button");
+const modalVisitProjectButton = document.querySelector(".modal-project-visit-button");
+
+function showModal(id){
+    const content = modalContent[id];
+    if(content){
+        modalTitle.textContent = content.title;
+        modalProjectDescription.textContent = content.content;
+        
+        if(content.link){
+            modalVisitProjectButton.href = content.link;
+            modalVisitProjectButton.classList.remove("hidden");
+        } else{
+            modalVisitProjectButton.classList.add("hidden");
+        }
+        modal.classList.toggle("hidden");
+    }
+}
+
+function hideModal(){
+    modal.classList.toggle("hidden");
+}
+
 let intersectObject = "";
 const intersectObjects = [];
 const intersectObjectsNames = [
-    "Cube072",
-    "Cube073",
-    "Plane138",
-    "Cube074",
-    "Cube077",
-    "Plane139",
-    "Plane140",
-    "Cube076",
+    "artProject",
+    "CharacterGroup",
+    "FountainGroup",
+    "kennyJamProject",
+    "mainParkSign",
+    "miso",
+    "projectSign",
+    "taskTideProject",
 ];
 const canvas = document.getElementById("experience-canvas");
 const aspect = sizes.width / sizes.height;
@@ -34,11 +84,21 @@ const loader = new GLTFLoader();
 
 //loading model
 loader.load( "./first4jsproject.glb", function ( glb ) {
+    console.log("GlB Scene:", glb.scene);
+    const characterMeshes = [];
+    const fountainMeshes = [];
     glb.scene.traverse((child)=>{
+
         if(child.isMesh){
+            if (child.isMesh && child.name.startsWith("character")) {
+            characterMeshes.push(child);
+            }
+            if (child.isMesh && child.name.startsWith("fountain")) {
+            fountainMeshes.push(child);
+            }
             child.castShadow = true;
             child.receiveShadow = true;
-            console.log(child.name);
+            
             //change pot material
             if (child.material.name === "Material.028" || child.material.name === "Material.025"){
                 child.material.color.setHex(0xEC5800);
@@ -52,6 +112,24 @@ loader.load( "./first4jsproject.glb", function ( glb ) {
             intersectObjects.push(child);
         }
     })
+    const characterGroup = groupMeshes(characterMeshes, "CharacterGroup");
+    scene.add(characterGroup);
+
+    if (intersectObjectsNames.includes("CharacterGroup")) {
+    //add child meshes
+    characterGroup.traverse(c => c.isMesh && intersectObjects.push(c));
+
+    // intersectObjects.push(makeHitbox(characterGroup));
+    }
+    const fountainGroup = groupMeshes(fountainMeshes, "FountainGroup");
+    scene.add(fountainGroup);
+
+    if (intersectObjectsNames.includes("FountainGroup")) {
+    fountainGroup.traverse(c => c.isMesh && intersectObjects.push(c));
+
+    // intersectObjects.push(makeHitbox(characterGroup));
+    }
+    character.instance = characterGroup;
     scene.add( glb.scene );
 }, 
     undefined, 
@@ -108,6 +186,18 @@ const controls = new OrbitControls(camera, canvas);
 controls.update();
 
 
+//helper to group same meshes
+function groupMeshes(meshes, groupName = "Group") {
+    const group = new THREE.Group();
+    group.name = groupName;
+
+    meshes.forEach(mesh => {
+        group.attach(mesh); // keeps world position/rotation/scale intact
+    });
+
+    return group;
+}
+
 
 function onResize(){
     sizes.width = window.innerWidth;
@@ -134,12 +224,27 @@ function onPointerMove( event ) {
 }
 
 function onClick(){
+    if(intersectObject !== ""){
+        showModal(intersectObject);
+    }
     console.log(intersectObject);
 }
+
+function onKeyDown(){
+    console.log(event);
+    switch(event.key.toLowerCase()){
+        case"w":
+        case"arrow up":
+            character.instance.position.z += character.moveDistance;
+            break;
+    }
+}
+
+modalExitButton.addEventListener("click", hideModal);
 window.addEventListener("resize", onResize);
 window.addEventListener("click", onClick);
 window.addEventListener("pointermove", onPointerMove);
-
+window.addEventListener("keydown", onKeyDown);
 // animation
 function animate() {
 

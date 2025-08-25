@@ -5,6 +5,7 @@
     font-family: "Pixelify Sans", sans-serif;
 }
 
+/* experience */
 #experience{
     position: fixed;
     height: 100%;
@@ -19,12 +20,31 @@
     height: 100%;
 }
 
+/* Utilities */
+.hidden{
+    display: none;
+} 
+
+/* modal */
 .modal {
-    z-index: 999;
+    z-index: 1000;
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     width: 100%;
     max-width: 700px;
+    background-color: #bd8b6d ;
+    border: 2px solid #ede1da;
+    color: #ede1da;
+}
+.modal-wrapper{
+    padding: 12px;
+}
+
+.modal-header{
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
 }
