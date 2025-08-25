@@ -16,8 +16,11 @@ const pointer = new THREE.Vector2();
 
 let character = {
     instance: null,
-    moveDistance: 3,
-}
+    moveDistance: 1.75,
+    jumpHeight: 1,
+    isMoving: false,
+    moveDuration: 0.2,
+};
 
 const modalContent = {
     "KennyJamSign002":{
@@ -84,18 +87,15 @@ const loader = new GLTFLoader();
 
 //loading model
 loader.load( "./first4jsproject.glb", function ( glb ) {
-    console.log("GlB Scene:", glb.scene);
+    scene.add(glb.scene);
+
     const characterMeshes = [];
     const fountainMeshes = [];
-    glb.scene.traverse((child)=>{
 
+    glb.scene.traverse((child)=>{
         if(child.isMesh){
-            if (child.isMesh && child.name.startsWith("character")) {
-            characterMeshes.push(child);
-            }
-            if (child.isMesh && child.name.startsWith("fountain")) {
-            fountainMeshes.push(child);
-            }
+            if (child.isMesh && child.name.startsWith("character")) characterMeshes.push(child);
+            if (child.isMesh && child.name.startsWith("fountain")) fountainMeshes.push(child);
             child.castShadow = true;
             child.receiveShadow = true;
             
@@ -112,31 +112,21 @@ loader.load( "./first4jsproject.glb", function ( glb ) {
             intersectObjects.push(child);
         }
     })
-    const characterGroup = groupMeshes(characterMeshes, "CharacterGroup");
-    scene.add(characterGroup);
+     // 3) Build pivoted groups (no extra scene.add needed inside your code now)
+    const characterGroup = groupMeshesPivoted(scene, characterMeshes, "CharacterGroup");
+    const fountainGroup  = groupMeshesPivoted(scene, fountainMeshes, "FountainGroup");
 
+    // 4) Raycasting: add meshes inside the groups
     if (intersectObjectsNames.includes("CharacterGroup")) {
-    //add child meshes
-    characterGroup.traverse(c => c.isMesh && intersectObjects.push(c));
-
-    // intersectObjects.push(makeHitbox(characterGroup));
+        characterGroup.traverse(c => c.isMesh && intersectObjects.push(c));
     }
-    const fountainGroup = groupMeshes(fountainMeshes, "FountainGroup");
-    scene.add(fountainGroup);
-
     if (intersectObjectsNames.includes("FountainGroup")) {
-    fountainGroup.traverse(c => c.isMesh && intersectObjects.push(c));
-
-    // intersectObjects.push(makeHitbox(characterGroup));
+        fountainGroup.traverse(c => c.isMesh && intersectObjects.push(c));
     }
+
+    // 5) Use the pivot as the character instance
     character.instance = characterGroup;
-    scene.add( glb.scene );
-}, 
-    undefined, 
-    function ( error ) {
-    console.error( error );
-} 
-);
+});
 
 //sun
 const sun = new THREE.DirectionalLight( 0xFFE484, 6);
@@ -186,17 +176,29 @@ const controls = new OrbitControls(camera, canvas);
 controls.update();
 
 
-//helper to group same meshes
-function groupMeshes(meshes, groupName = "Group") {
-    const group = new THREE.Group();
-    group.name = groupName;
+// --- Pivoted grouping that preserves size, rotation, position ---
+function groupMeshesPivoted(scene, meshes, groupName = "Group") {
+    // Make sure world matrices include any transforms from parents (like glb.scene)
+    scene.updateWorldMatrix(true, true);
 
-    meshes.forEach(mesh => {
-        group.attach(mesh); // keeps world position/rotation/scale intact
-    });
+    // World-space bounding box across all meshes
+    const box = new THREE.Box3();
+    meshes.forEach(m => box.expandByObject(m));
+    const center = box.getCenter(new THREE.Vector3());
 
-    return group;
+    // Create a pivot at the world center and add to the scene
+    const pivot = new THREE.Group();
+    pivot.name = groupName;
+    pivot.position.copy(center);
+    scene.add(pivot);
+
+    // Reparent while preserving world transforms
+    meshes.forEach(m => pivot.attach(m));
+
+    return pivot;
 }
+
+
 
 
 function onResize(){
@@ -230,14 +232,62 @@ function onClick(){
     console.log(intersectObject);
 }
 
-function onKeyDown(){
-    console.log(event);
-    switch(event.key.toLowerCase()){
-        case"w":
-        case"arrow up":
-            character.instance.position.z += character.moveDistance;
+function moveCharacter(targetPosition, targetRotation){
+    character.isMoving = true;
+
+    const t1 = gsap.timeline({
+        onComplete: ()=>{
+            character.isMoving = false;
+        }
+    })
+
+    t1.to(character.instance.position, {
+        x: targetPosition.x,
+        z: targetPosition.z,
+        duration: character.moveDuration,
+    });
+    t1.to(character.instance.rotation, {
+        y: targetRotation,
+        duration: character.moveDuration,
+    });
+}
+function onKeyDown(event) {
+    if (character.isMoving) return;
+
+    const targetPosition = new THREE.Vector3().copy(character.instance.position);
+    const moveDist = character.moveDistance;
+
+    switch (event.key.toLowerCase()) {
+        case "w":
+        case "arrowup":
+            targetPosition.z += moveDist;
             break;
+
+        case "s":
+        case "arrowdown":
+            targetPosition.z -= moveDist;
+            break;
+
+        case "a":
+        case "arrowleft":
+            targetPosition.x += moveDist;
+            break;
+
+        case "d":
+        case "arrowright":
+            targetPosition.x -= moveDist;
+            break;
+
+        default:
+            return;
     }
+
+    // 👉 Compute direction vector from current pos → target pos
+    const dir = new THREE.Vector3().subVectors(targetPosition, character.instance.position);
+    // 👉 Convert direction to rotation angle (Y-axis, since it's top-down)
+    const targetRotation = Math.atan2(dir.x, dir.z);
+
+    moveCharacter(targetPosition, targetRotation);
 }
 
 modalExitButton.addEventListener("click", hideModal);
