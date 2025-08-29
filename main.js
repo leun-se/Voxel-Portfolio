@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {Octree} from 'three/addons/math/Octree.js';
+import {Capsule} from "three/addons/math/Capsule.js";
 
 
 
@@ -13,15 +15,29 @@ const sizes = {
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
+//Physics stuff
+const GRAVITY = 40;
+const CAPSULE_RADIUS = 0.5;
+const CAPSULE_HEIGHT = 1;
+const JUMP_HEIGHT = 10;
+const MOVE_SPEED = 3;
 
 let character = {
     instance: null,
-    moveDistance: 1.75,
-    jumpHeight: 1,
     isMoving: false,
-    moveDuration: 0.2,
 };
 
+let targetRotation = 0;
+let playerVelocity = new THREE.Vector3();
+let playerOnFloor = false;
+
+const colliderOctree = new Octree();
+
+const playerCollider = new Capsule(
+    new THREE.Vector3(0, CAPSULE_RADIUS, 0),
+    new THREE.Vector3(0, CAPSULE_HEIGHT, 0),
+    CAPSULE_RADIUS
+);
 const modalContent = {
     "KennyJamSign002":{
         title: "Project One",
@@ -86,14 +102,14 @@ const scene = new THREE.Scene();
 const loader = new GLTFLoader();
 
 //loading model
-loader.load( "./first4jsproject.glb", function ( glb ) {
+loader.load( "./first3jsproject.glb", function ( glb ) {
     scene.add(glb.scene);
-
     const characterMeshes = [];
     const fountainMeshes = [];
 
     glb.scene.traverse((child)=>{
         if(child.isMesh){
+            console.log(child);
             if (child.isMesh && child.name.startsWith("character")) characterMeshes.push(child);
             if (child.isMesh && child.name.startsWith("fountain")) fountainMeshes.push(child);
             child.castShadow = true;
@@ -111,6 +127,9 @@ loader.load( "./first4jsproject.glb", function ( glb ) {
         if(intersectObjectsNames.includes(child.name)){
             intersectObjects.push(child);
         }
+        if(child.name === "GroundCollider"){
+            colliderOctree.fromGraphNode(child);
+        }
     })
      // 3) Build pivoted groups (no extra scene.add needed inside your code now)
     const characterGroup = groupMeshesPivoted(scene, characterMeshes, "CharacterGroup");
@@ -119,6 +138,12 @@ loader.load( "./first4jsproject.glb", function ( glb ) {
     // 4) Raycasting: add meshes inside the groups
     if (intersectObjectsNames.includes("CharacterGroup")) {
         characterGroup.traverse(c => c.isMesh && intersectObjects.push(c));
+        playerCollider.start
+            .copy(characterGroup.position.y)
+            .add(new THREE.Vector3(0, CAPSULE_RADIUS, 0));
+        playerCollider.end
+            .copy(characterGroup.position)
+            .add(new THREE.Vector3(0, CAPSULE_HEIGHT, 0));
     }
     if (intersectObjectsNames.includes("FountainGroup")) {
         fountainGroup.traverse(c => c.isMesh && intersectObjects.push(c));
@@ -126,7 +151,14 @@ loader.load( "./first4jsproject.glb", function ( glb ) {
 
     // 5) Use the pivot as the character instance
     character.instance = characterGroup;
+    playerCollider.start
+        .copy(character.instance.position)
+        .add(new THREE.Vector3(0, CAPSULE_RADIUS, 0));
+    playerCollider.end
+        .copy(character.instance.position)
+        .add(new THREE.Vector3(0, CAPSULE_HEIGHT, 0));
 });
+
 
 //sun
 const sun = new THREE.DirectionalLight( 0xFFE484, 6);
@@ -176,29 +208,80 @@ const controls = new OrbitControls(camera, canvas);
 controls.update();
 
 
-// --- Pivoted grouping that preserves size, rotation, position ---
 function groupMeshesPivoted(scene, meshes, groupName = "Group") {
-    // Make sure world matrices include any transforms from parents (like glb.scene)
-    scene.updateWorldMatrix(true, true);
+scene.updateWorldMatrix(true, true);
 
-    // World-space bounding box across all meshes
-    const box = new THREE.Box3();
-    meshes.forEach(m => box.expandByObject(m));
-    const center = box.getCenter(new THREE.Vector3());
 
-    // Create a pivot at the world center and add to the scene
-    const pivot = new THREE.Group();
-    pivot.name = groupName;
-    pivot.position.copy(center);
-    scene.add(pivot);
+const box = new THREE.Box3();
+meshes.forEach(m => box.expandByObject(m));
+const center = box.getCenter(new THREE.Vector3());
+const size = box.getSize(new THREE.Vector3());
 
-    // Reparent while preserving world transforms
-    meshes.forEach(m => pivot.attach(m));
 
-    return pivot;
+// Move pivot to bottom-center instead of middle (feet placement)
+center.y -= size.y / 2;
+
+
+const pivot = new THREE.Group();
+pivot.name = groupName;
+pivot.position.copy(center);
+scene.add(pivot);
+
+
+meshes.forEach(m => pivot.attach(m));
+
+
+return pivot;
+}
+
+// --- Debug: draw capsule wireframe ---
+function debugCapsule(capsule, scene) {
+const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+const geometry = new THREE.BufferGeometry();
+const points = [];
+
+
+const start = capsule.start.clone();
+const end = capsule.end.clone();
+const radius = capsule.radius;
+const segments = 16;
+
+
+// Cylinder side lines
+for (let i = 0; i < segments; i++) {
+const theta = (i / segments) * Math.PI * 2;
+const x = Math.cos(theta) * radius;
+const z = Math.sin(theta) * radius;
+points.push(new THREE.Vector3(start.x + x, start.y, start.z + z));
+points.push(new THREE.Vector3(end.x + x, end.y, end.z + z));
 }
 
 
+// Top hemisphere
+for (let i = 0; i <= segments; i++) {
+const theta = (i / segments) * Math.PI;
+const x = Math.cos(theta) * radius;
+const y = Math.sin(theta) * radius;
+points.push(new THREE.Vector3(end.x + x, end.y + y, end.z));
+}
+
+
+// Bottom hemisphere
+for (let i = 0; i <= segments; i++) {
+const theta = (i / segments) * Math.PI;
+const x = Math.cos(theta) * radius;
+const y = Math.sin(theta) * radius;
+points.push(new THREE.Vector3(start.x + x, start.y - y, start.z));
+}
+
+
+geometry.setFromPoints(points);
+const line = new THREE.LineSegments(geometry, material);
+scene.add(line);
+
+
+setTimeout(() => scene.remove(line), 50); // remove after a short time
+}
 
 
 function onResize(){
@@ -227,68 +310,145 @@ function onPointerMove( event ) {
 
 function onClick(){
     if(intersectObject !== ""){
-        showModal(intersectObject);
+        if (["miso"].includes(intersectObject)){
+            jumpCharacter(intersectObject);
+        }else{
+            showModal(intersectObject);
+        }
     }
     console.log(intersectObject);
 }
 
-function moveCharacter(targetPosition, targetRotation){
-    character.isMoving = true;
+function jumpCharacter(meshID){
+    const mesh = scene.getObjectByName(meshID);
+    const jumpHeight = 2;
+    const jumpDuration = 0.5;
 
-    const t1 = gsap.timeline({
-        onComplete: ()=>{
-            character.isMoving = false;
+    const t1 = gsap.timeline();
+
+    t1.to(mesh.scale, {
+        x: 1.2,
+        y: 0.8,
+        z: 1.2,
+        duration: jumpDuration * 0.2,
+        ease: "power2.out",
+    });
+
+    t1.to(mesh.scale, {
+        x: 0.8,
+        y: 1.3,
+        z: 0.8,
+        duration: jumpDuration * 0.3,
+        ease: "power2.out",
+    });
+
+    t1.to(
+        mesh.position,
+        {
+            y: mesh.position.y + jumpHeight,
+            duration: jumpDuration * 0.5,
+            ease: "power2.out",
         }
-    })
+    );
 
-    t1.to(character.instance.position, {
-        x: targetPosition.x,
-        z: targetPosition.z,
-        duration: character.moveDuration,
+    t1.to(mesh.scale, {
+        x: 1,
+        y: 1,
+        z: 1,
+        duration: jumpDuration * 0.3,
+        ease: "power1.inOut",
     });
-    t1.to(character.instance.rotation, {
-        y: targetRotation,
-        duration: character.moveDuration,
+
+    t1.to(
+        mesh.position,
+        {
+            y: mesh.position.y,
+            duration: jumpDuration * 0.5,
+            ease: "bounce.out",
+        },
+        ">"
+    );
+
+    t1.to(mesh.scale, {
+        x: 1,
+        y: 1,
+        z: 1,
+        duration: jumpDuration * 0.2,
+        ease: "elastic.out(1, 0.3)",
     });
+}
+
+function playerCollisions(){
+    const result = colliderOctree.capsuleIntersect(playerCollider);
+    playerOnFloor = false;
+
+    if(result){
+        playerOnFloor = result.normal.y>0;
+        playerCollider.translate(result.normal.multiplyScalar(result.depth));
+
+        if(playerOnFloor){
+            character.isMoving = false;
+            playerVelocity.x = 0;
+            playerVelocity.z = 0;
+            
+        }
+    }
+}
+function updatePlayer(){
+    if (!character.instance) return;
+
+    if (!playerOnFloor){
+        playerVelocity.y -= GRAVITY * 0.01;
+    }
+
+    playerCollider.translate(playerVelocity.clone().multiplyScalar(0.01));
+
+    playerCollisions();
+
+    character.instance.position.copy(playerCollider.start);
+    character.instance.position.y -= CAPSULE_RADIUS;
+
+    character.instance.rotation.y = THREE.MathUtils.lerp(character.instance.rotation.y, targetRotation, 0.1);
 }
 function onKeyDown(event) {
     if (character.isMoving) return;
-
-    const targetPosition = new THREE.Vector3().copy(character.instance.position);
-    const moveDist = character.moveDistance;
+    const moveDist = MOVE_SPEED;
 
     switch (event.key.toLowerCase()) {
         case "w":
         case "arrowup":
-            targetPosition.z += moveDist;
+            playerVelocity.z += moveDist;
+            targetRotation = 0;
             break;
-
         case "s":
         case "arrowdown":
-            targetPosition.z -= moveDist;
+            playerVelocity.z -= moveDist;
+            targetRotation = Math.PI;
             break;
 
         case "a":
         case "arrowleft":
-            targetPosition.x += moveDist;
+            playerVelocity.x += moveDist;
+            targetRotation = Math.PI / 2;
             break;
 
         case "d":
         case "arrowright":
-            targetPosition.x -= moveDist;
+            playerVelocity.x -= moveDist;
+            targetRotation = -Math.PI / 2;
             break;
-
         default:
             return;
     }
 
-    // 👉 Compute direction vector from current pos → target pos
-    const dir = new THREE.Vector3().subVectors(targetPosition, character.instance.position);
-    // 👉 Convert direction to rotation angle (Y-axis, since it's top-down)
-    const targetRotation = Math.atan2(dir.x, dir.z);
+    // hop upward only if on ground
+    if (playerOnFloor) {
+        playerVelocity.y = JUMP_HEIGHT;
+    }
 
-    moveCharacter(targetPosition, targetRotation);
+    character.isMoving = true;
 }
+
 
 modalExitButton.addEventListener("click", hideModal);
 window.addEventListener("resize", onResize);
@@ -297,7 +457,7 @@ window.addEventListener("pointermove", onPointerMove);
 window.addEventListener("keydown", onKeyDown);
 // animation
 function animate() {
-
+    updatePlayer();
     // update the picking ray with the camera and pointer position
 	raycaster.setFromCamera( pointer, camera );
 
@@ -315,6 +475,7 @@ function animate() {
 	for ( let i = 0; i < intersects.length; i ++ ) {
         intersectObject = intersects[0].object.parent.name;
 	}
+    debugCapsule(playerCollider, scene);
 	renderer.render( scene, camera );
 }
 
