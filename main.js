@@ -16,10 +16,10 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
 //Physics stuff
-const GRAVITY = 40;
-const CAPSULE_RADIUS = 0.5;
+const GRAVITY = 30;
+const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HEIGHT = 1;
-const JUMP_HEIGHT = 10;
+const JUMP_HEIGHT = 11;
 const MOVE_SPEED = 3;
 
 let character = {
@@ -91,7 +91,7 @@ const intersectObjectsNames = [
     "kennyJamProject",
     "mainParkSign",
     "miso",
-    "projectSign",
+    "projectsSign",
     "taskTideProject",
 ];
 const canvas = document.getElementById("experience-canvas");
@@ -310,7 +310,7 @@ function onPointerMove( event ) {
 
 function onClick(){
     if(intersectObject !== ""){
-        if (["miso"].includes(intersectObject)){
+        if (["Miso","ProjectsSign","MainParkSign"].includes(intersectObject)){
             jumpCharacter(intersectObject);
         }else{
             showModal(intersectObject);
@@ -319,135 +319,229 @@ function onClick(){
     console.log(intersectObject);
 }
 
-function jumpCharacter(meshID){
+// --- Squash & Stretch Settings for click-based jumps ---
+const CLICK_SQUASH  = { x: 1.2, y: 0.8, z: 1.2 };  // on crouch
+const CLICK_STRETCH = { x: 0.8, y: 1.3, z: 0.8 };  // on launch
+const CLICK_LAND    = { x: 1.1, y: 0.9, z: 1.1 };  // on landing
+
+function jumpCharacter(meshID) {
     const mesh = scene.getObjectByName(meshID);
     const jumpHeight = 2;
-    const jumpDuration = 0.5;
+    const jumpDuration = 0.6;
 
-    const t1 = gsap.timeline();
+    const originalScale = { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z}
+    // --- Kill old tweens and reset scale/position ---
+    gsap.killTweensOf(mesh.scale);
+    gsap.killTweensOf(mesh.position);
 
-    t1.to(mesh.scale, {
-        x: 1.2,
-        y: 0.8,
-        z: 1.2,
+    const tl = gsap.timeline();
+
+    // Takeoff squash
+    tl.to(mesh.scale, {
+        
+        ...CLICK_SQUASH,
+        duration: jumpDuration * 0.2,
+        ease: "power2.out",
+    });
+    // Stretch upward
+    tl.to(mesh.scale, {
+        ...CLICK_STRETCH,
         duration: jumpDuration * 0.2,
         ease: "power2.out",
     });
 
-    t1.to(mesh.scale, {
-        x: 0.8,
-        y: 1.3,
-        z: 0.8,
-        duration: jumpDuration * 0.3,
+    // Jump up
+    tl.to(mesh.position, {
+        y: `+=${Math.abs(jumpHeight)}`,
+        duration: jumpDuration * 0.4,
         ease: "power2.out",
+    }, "<");
+    // Landing squash
+    tl.to(mesh.scale, {
+        ...CLICK_LAND,
+        duration: jumpDuration * 0.15,
+        ease: "power2.in",
     });
 
-    t1.to(
-        mesh.position,
-        {
-            y: mesh.position.y + jumpHeight,
-            duration: jumpDuration * 0.5,
-            ease: "power2.out",
-        }
-    );
-
-    t1.to(mesh.scale, {
-        x: 1,
-        y: 1,
-        z: 1,
-        duration: jumpDuration * 0.3,
-        ease: "power1.inOut",
-    });
-
-    t1.to(
-        mesh.position,
-        {
-            y: mesh.position.y,
-            duration: jumpDuration * 0.5,
-            ease: "bounce.out",
-        },
-        ">"
-    );
-
-    t1.to(mesh.scale, {
-        x: 1,
-        y: 1,
-        z: 1,
-        duration: jumpDuration * 0.2,
+    // Bounce back to normal
+    tl.to(mesh.scale, {
+        x: originalScale.x, y: originalScale.y, z: originalScale.z,
+        duration: jumpDuration * 0.25,
         ease: "elastic.out(1, 0.3)",
     });
+
+    // Return to ground
+    tl.to(mesh.position, {
+        y: `-=${Math.abs(jumpHeight)}`,
+        duration: jumpDuration * 0.4,
+        ease: "bounce.out",
+    }, "<");
+
 }
 
-function playerCollisions(){
+
+
+
+
+// --- Squash & Stretch Settings ---
+const TAKEOFF_SQUASH = {x: 1.1, y: 0.9, z: 1.1};
+const TAKEOFF_STRETCH = {x: .9, y: 1.2, z: .9};
+const LANDING_SQUASH = {x: 1.1, y: .98, z: 1.1};
+
+function playerCollisions() {
     const result = colliderOctree.capsuleIntersect(playerCollider);
+    let wasOnFloor = playerOnFloor; // track previous state
     playerOnFloor = false;
 
-    if(result){
-        playerOnFloor = result.normal.y>0;
+    if (result) {
+        playerOnFloor = result.normal.y > 0;
         playerCollider.translate(result.normal.multiplyScalar(result.depth));
 
-        if(playerOnFloor){
+        if (playerOnFloor) {
             character.isMoving = false;
             playerVelocity.x = 0;
             playerVelocity.z = 0;
-            
+
+            // --- NEW: landing squash ---
+            if (!wasOnFloor) {
+                // --- Landing squash ---
+                gsap.killTweensOf(character.instance.scale);
+                character.instance.scale.set(1, 1, 1);
+
+                const tl = gsap.timeline();
+                tl.to(character.instance.scale, {
+                    ...LANDING_SQUASH,
+                    duration: 0.1,
+                    ease: "power2.in",
+                })
+                .to(character.instance.scale, {
+                    x: 1, y: 1, z: 1,
+                    duration: 0.2,
+                    ease: "bounce.out",
+                });
+            }
         }
     }
 }
-function updatePlayer(){
+
+
+// Track pressed keys
+const keyStates = {};
+let activeKey = null;          // the single movement key being honored
+let lastHopTime = 0;           // cooldown
+const HOP_COOLDOWN = 300;      // ms between hops
+
+// --- Input events ---
+function onKeyDown(event) {
+    const key = event.key.toLowerCase();
+
+    // If we already have an active key, ignore others (no diagonals)
+    if (!activeKey) {
+        activeKey = key;
+        keyStates[key] = true;
+    }
+}
+
+function onKeyUp(event) {
+    const key = event.key.toLowerCase();
+    keyStates[key] = false;
+
+    // Release active key if lifted
+    if (key === activeKey) {
+        activeKey = null;
+    }
+}
+
+function updatePlayer() {
     if (!character.instance) return;
 
-    if (!playerOnFloor){
+    // Gravity
+    if (!playerOnFloor) {
         playerVelocity.y -= GRAVITY * 0.01;
     }
 
-    playerCollider.translate(playerVelocity.clone().multiplyScalar(0.01));
+    const now = performance.now();
 
+    // If on floor and cooldown passed → set new hop direction
+    if (activeKey && playerOnFloor && now - lastHopTime > HOP_COOLDOWN) {
+        const moveDist = MOVE_SPEED;
+
+        // Reset old horizontal velocity only when starting a new hop
+        playerVelocity.x = 0;
+        playerVelocity.z = 0;
+
+        switch (activeKey) {
+            case "w":
+            case "arrowup":
+                playerVelocity.z += moveDist;
+                targetRotation = 0;
+                break;
+            case "s":
+            case "arrowdown":
+                playerVelocity.z -= moveDist;
+                targetRotation = Math.PI;
+                break;
+            case "a":
+            case "arrowleft":
+                playerVelocity.x += moveDist;
+                targetRotation = Math.PI / 2;
+                break;
+            case "d":
+            case "arrowright":
+                playerVelocity.x -= moveDist;
+                targetRotation = -Math.PI / 2;
+                break;
+        }
+
+        // hop upward
+        playerVelocity.y = JUMP_HEIGHT;
+        lastHopTime = now;
+
+        // --- Takeoff squash & stretch ---
+        gsap.killTweensOf(character.instance.scale);
+        character.instance.scale.set(1, 1, 1);
+
+        const tl = gsap.timeline();
+        tl.to(character.instance.scale, {
+            ...TAKEOFF_SQUASH,
+            duration: 0.1,
+            ease: "power2.out",
+        })
+        .to(character.instance.scale, {
+            ...TAKEOFF_STRETCH,
+            duration: 0.2,
+            ease: "power2.out",
+        })
+        .to(character.instance.scale, {
+            x: 1, y: 1, z: 1,
+            duration: 0.3,
+            ease: "bounce.out",
+        });
+
+    }
+
+    // Apply velocity
+    playerCollider.translate(playerVelocity.clone().multiplyScalar(0.01));
     playerCollisions();
 
+    // Update instance position
     character.instance.position.copy(playerCollider.start);
     character.instance.position.y -= CAPSULE_RADIUS;
 
-    character.instance.rotation.y = THREE.MathUtils.lerp(character.instance.rotation.y, targetRotation, 0.1);
+    // Smooth rotation
+    character.instance.rotation.y = THREE.MathUtils.lerp(
+        character.instance.rotation.y,
+        targetRotation,
+        0.1
+    );
 }
-function onKeyDown(event) {
-    if (character.isMoving) return;
-    const moveDist = MOVE_SPEED;
 
-    switch (event.key.toLowerCase()) {
-        case "w":
-        case "arrowup":
-            playerVelocity.z += moveDist;
-            targetRotation = 0;
-            break;
-        case "s":
-        case "arrowdown":
-            playerVelocity.z -= moveDist;
-            targetRotation = Math.PI;
-            break;
 
-        case "a":
-        case "arrowleft":
-            playerVelocity.x += moveDist;
-            targetRotation = Math.PI / 2;
-            break;
 
-        case "d":
-        case "arrowright":
-            playerVelocity.x -= moveDist;
-            targetRotation = -Math.PI / 2;
-            break;
-        default:
-            return;
-    }
+// --- Listeners ---
+window.addEventListener("keydown", onKeyDown);
+window.addEventListener("keyup", onKeyUp);
 
-    // hop upward only if on ground
-    if (playerOnFloor) {
-        playerVelocity.y = JUMP_HEIGHT;
-    }
-
-    character.isMoving = true;
-}
 
 
 modalExitButton.addEventListener("click", hideModal);
