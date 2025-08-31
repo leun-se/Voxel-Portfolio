@@ -606,11 +606,15 @@ function animate() {
             character.instance.position.z + cameraOffset.z + 20,
         );
         camera.position.copy(targetCameraPosition);
-        // camera.lookAt(
-        //     character.instance.position.x, 
-        //     camera.position.y - 24,
-        //     character.instance.position.z,
-        // );
+
+        const lookTarget = new THREE.Vector3(
+            character.instance.position.x,
+            camera.position.y - 24,
+            character.instance.position.z
+        );
+        camera.lookAt(lookTarget);
+
+        camera.updateMatrixWorld(true);
     }
     
     // update the picking ray with the camera and pointer position
