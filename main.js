@@ -14,9 +14,10 @@ const sizes = {
 // init
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
+const clock = new THREE.Clock();
 
 //Physics stuff
-const GRAVITY = 30;
+const GRAVITY = 40;
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HEIGHT = 1;
 const JUMP_HEIGHT = 11;
@@ -483,7 +484,7 @@ function onKeyUp(event) {
     }
 }
 
-function updatePlayer() {
+function updatePlayer(delta) {
     if (!character.instance) return;
 
     if (character.instance.position.y < -20){
@@ -492,7 +493,7 @@ function updatePlayer() {
     }
     // Gravity
     if (!playerOnFloor) {
-        playerVelocity.y -= GRAVITY * 0.01;
+        playerVelocity.y -= GRAVITY * delta;
     }
 
     const now = performance.now();
@@ -556,7 +557,7 @@ function updatePlayer() {
     }
 
     // Apply velocity
-    playerCollider.translate(playerVelocity.clone().multiplyScalar(0.01));
+    playerCollider.translate(playerVelocity.clone().multiplyScalar(delta));
     playerCollisions();
 
     let rotationDiff =
@@ -593,8 +594,10 @@ window.addEventListener("pointermove", onPointerMove);
 window.addEventListener("keydown", onKeyDown);
 // animation
 function animate() {
-    updatePlayer();
-    console.log(camera.position, camera.zoom);
+    const delta = clock.getDelta();
+
+    updatePlayer(delta);
+    //console.log(camera.position, camera.zoom);
     if(character.instance){
         camera.lookAt(character.instance.position);
     }
