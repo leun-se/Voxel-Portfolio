@@ -25,11 +25,13 @@ const MOVE_SPEED = 3;
 let character = {
     instance: null,
     isMoving: false,
+    spawnPosition: new THREE.Vector3(),
 };
 
 let targetRotation = 0;
 let playerVelocity = new THREE.Vector3();
 let playerOnFloor = false;
+let isJumping = false;
 
 const colliderOctree = new Octree();
 
@@ -39,17 +41,17 @@ const playerCollider = new Capsule(
     CAPSULE_RADIUS
 );
 const modalContent = {
-    "KennyJamSign002":{
+    "KennyJamProject":{
         title: "Project One",
         content: "This is project one, hello world",
         link: "https://www.example.com/",
     },
-    "task_tide_sign001":{
+    "TaskTideProject":{
         title: "Project Two",
         content: "This is project two, hello world",
         link: "https://www.example.com/",
     },
-    "art_sign001":{
+    "ArtProject":{
         title: "Project Three",
         content: "This is project three, hello world",
         link: "https://www.example.com/",
@@ -86,17 +88,17 @@ let intersectObject = "";
 const intersectObjects = [];
 const intersectObjectsNames = [
     "artProject",
-    "CharacterGroup",
+    //"CharacterGroup",
     "FountainGroup",
     "kennyJamProject",
-    "mainParkSign",
+    "MainParkSignGroup",
     "miso",
     "projectsSign",
     "taskTideProject",
 ];
 const canvas = document.getElementById("experience-canvas");
 const aspect = sizes.width / sizes.height;
-const camera = new THREE.OrthographicCamera( -aspect * 50, aspect * 50, 50, -50, 1, 1500);
+const camera = new THREE.OrthographicCamera( -aspect * 50, aspect * 50, 50, -50, 1, 1000);
 const scene = new THREE.Scene();
 
 const loader = new GLTFLoader();
@@ -106,10 +108,15 @@ loader.load( "./first3jsproject.glb", function ( glb ) {
     scene.add(glb.scene);
     const characterMeshes = [];
     const fountainMeshes = [];
+    const mainParkMeshes = [];
 
     glb.scene.traverse((child)=>{
         if(child.isMesh){
-            console.log(child);
+            //console.log(child);
+            if(child.name === "GroundCollider"){
+                child.visible = false;
+            }
+            if (child.isMesh && child.name.startsWith("main")) mainParkMeshes.push(child);
             if (child.isMesh && child.name.startsWith("character")) characterMeshes.push(child);
             if (child.isMesh && child.name.startsWith("fountain")) fountainMeshes.push(child);
             child.castShadow = true;
@@ -134,6 +141,7 @@ loader.load( "./first3jsproject.glb", function ( glb ) {
      // 3) Build pivoted groups (no extra scene.add needed inside your code now)
     const characterGroup = groupMeshesPivoted(scene, characterMeshes, "CharacterGroup");
     const fountainGroup  = groupMeshesPivoted(scene, fountainMeshes, "FountainGroup");
+    const mainParkSignGroup = groupMeshesPivoted(scene, mainParkMeshes, "MainParkSignGroup" );
 
     // 4) Raycasting: add meshes inside the groups
     if (intersectObjectsNames.includes("CharacterGroup")) {
@@ -148,15 +156,22 @@ loader.load( "./first3jsproject.glb", function ( glb ) {
     if (intersectObjectsNames.includes("FountainGroup")) {
         fountainGroup.traverse(c => c.isMesh && intersectObjects.push(c));
     }
+    if (intersectObjectsNames.includes("MainParkSignGroup")) {
+        mainParkSignGroup.traverse(c => c.isMesh && intersectObjects.push(c));
+    }
 
     // 5) Use the pivot as the character instance
     character.instance = characterGroup;
+    character.spawnPosition.copy(character.instance.position);
     playerCollider.start
-        .copy(character.instance.position)
+        .copy(character.spawnPosition)
         .add(new THREE.Vector3(0, CAPSULE_RADIUS, 0));
     playerCollider.end
-        .copy(character.instance.position)
+        .copy(character.spawnPosition)
         .add(new THREE.Vector3(0, CAPSULE_HEIGHT, 0));
+
+        playerVelocity.set(0,0,0);
+        character.isMoving = false;
 });
 
 
@@ -182,8 +197,8 @@ scene.add( HemisphereLight );
 // const HemisphereLightHelper = new THREE.HemisphereLightHelper( HemisphereLight, 5 );
 // scene.add( HemisphereLightHelper );
 
-const shadowHelper = new THREE.CameraHelper( sun.shadow.camera );
-scene.add( shadowHelper );
+// const shadowHelper = new THREE.CameraHelper( sun.shadow.camera );
+// scene.add( shadowHelper );
 //const helper = new THREE.DirectionalLightHelper( sun, 5 );
 //scene.add( helper );
 
@@ -199,13 +214,15 @@ renderer.toneMapping = THREE.CineonToneMapping;
 renderer.toneMappingExposure = 1.2;
 renderer.setAnimationLoop( animate );
 
-
-camera.position.x = 10;
-camera.position.y = 19;
-camera.position.z = -51;
-
-const controls = new OrbitControls(camera, canvas);
-controls.update();
+//x: -1.0522464151233315, y: 17.609943006428345, z: -56.29103350157238
+camera.position.x = -1.05;
+camera.position.y = 17.6;
+camera.position.z = -56.29;
+camera.zoom = 3.5;
+camera.updateProjectionMatrix();
+const cameraOffset = new THREE.Vector3(-1.05, 17.6, -56.29); 
+// const controls = new OrbitControls(camera, canvas);
+// controls.update();
 
 
 function groupMeshesPivoted(scene, meshes, groupName = "Group") {
@@ -235,53 +252,53 @@ return pivot;
 }
 
 // --- Debug: draw capsule wireframe ---
-function debugCapsule(capsule, scene) {
-const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
-const geometry = new THREE.BufferGeometry();
-const points = [];
+// function debugCapsule(capsule, scene) {
+// const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+// const geometry = new THREE.BufferGeometry();
+// const points = [];
 
 
-const start = capsule.start.clone();
-const end = capsule.end.clone();
-const radius = capsule.radius;
-const segments = 16;
+// const start = capsule.start.clone();
+// const end = capsule.end.clone();
+// const radius = capsule.radius;
+// const segments = 16;
 
 
-// Cylinder side lines
-for (let i = 0; i < segments; i++) {
-const theta = (i / segments) * Math.PI * 2;
-const x = Math.cos(theta) * radius;
-const z = Math.sin(theta) * radius;
-points.push(new THREE.Vector3(start.x + x, start.y, start.z + z));
-points.push(new THREE.Vector3(end.x + x, end.y, end.z + z));
-}
+// // Cylinder side lines
+// for (let i = 0; i < segments; i++) {
+// const theta = (i / segments) * Math.PI * 2;
+// const x = Math.cos(theta) * radius;
+// const z = Math.sin(theta) * radius;
+// points.push(new THREE.Vector3(start.x + x, start.y, start.z + z));
+// points.push(new THREE.Vector3(end.x + x, end.y, end.z + z));
+// }
 
 
-// Top hemisphere
-for (let i = 0; i <= segments; i++) {
-const theta = (i / segments) * Math.PI;
-const x = Math.cos(theta) * radius;
-const y = Math.sin(theta) * radius;
-points.push(new THREE.Vector3(end.x + x, end.y + y, end.z));
-}
+// // Top hemisphere
+// for (let i = 0; i <= segments; i++) {
+// const theta = (i / segments) * Math.PI;
+// const x = Math.cos(theta) * radius;
+// const y = Math.sin(theta) * radius;
+// points.push(new THREE.Vector3(end.x + x, end.y + y, end.z));
+// }
 
 
-// Bottom hemisphere
-for (let i = 0; i <= segments; i++) {
-const theta = (i / segments) * Math.PI;
-const x = Math.cos(theta) * radius;
-const y = Math.sin(theta) * radius;
-points.push(new THREE.Vector3(start.x + x, start.y - y, start.z));
-}
+// // Bottom hemisphere
+// for (let i = 0; i <= segments; i++) {
+// const theta = (i / segments) * Math.PI;
+// const x = Math.cos(theta) * radius;
+// const y = Math.sin(theta) * radius;
+// points.push(new THREE.Vector3(start.x + x, start.y - y, start.z));
+// }
 
 
-geometry.setFromPoints(points);
-const line = new THREE.LineSegments(geometry, material);
-scene.add(line);
+// geometry.setFromPoints(points);
+// const line = new THREE.LineSegments(geometry, material);
+// scene.add(line);
 
 
-setTimeout(() => scene.remove(line), 50); // remove after a short time
-}
+// setTimeout(() => scene.remove(line), 50); // remove after a short time
+// }
 
 
 function onResize(){
@@ -310,82 +327,94 @@ function onPointerMove( event ) {
 
 function onClick(){
     if(intersectObject !== ""){
-        if (["Miso","ProjectsSign","MainParkSign"].includes(intersectObject)){
+        if (!isJumping && ["Miso","ProjectsSign","MainParkSignGroup"].includes(intersectObject)){
             jumpCharacter(intersectObject);
         }else{
             showModal(intersectObject);
         }
     }
-    console.log(intersectObject);
+    //console.log(intersectObject);
 }
 
+function respawnCharacter(){
+    character.instance.position.copy(character.spawnPosition);
+
+    playerCollider.start
+        .copy(character.spawnPosition)
+        .add(new THREE.Vector3(0, CAPSULE_RADIUS,0));
+    playerCollider.end
+        .copy(character.spawnPosition)
+        .add(new THREE.Vector3(0, CAPSULE_HEIGHT, 0));
+}
 // --- Squash & Stretch Settings for click-based jumps ---
-const CLICK_SQUASH  = { x: 1.2, y: 0.8, z: 1.2 };  // on crouch
-const CLICK_STRETCH = { x: 0.8, y: 1.3, z: 0.8 };  // on launch
-const CLICK_LAND    = { x: 1.1, y: 0.9, z: 1.1 };  // on landing
+const CLICK_SQUASH  = { x: .6, y: .4, z: .6 };  // on crouch
+const CLICK_STRETCH = { x: .4, y: .6, z: 0.4 };  // on launch
+const CLICK_LAND    = { x: .6, y: .5, z: .6 };  // on landing
 
 function jumpCharacter(meshID) {
-    const mesh = scene.getObjectByName(meshID);
-    const jumpHeight = 2;
-    const jumpDuration = 0.6;
-
-    const originalScale = { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z}
-    // --- Kill old tweens and reset scale/position ---
-    gsap.killTweensOf(mesh.scale);
-    gsap.killTweensOf(mesh.position);
-
-    const tl = gsap.timeline();
-
-    // Takeoff squash
-    tl.to(mesh.scale, {
+    if(!isJumping){
+        isJumping = true;
+        const mesh = scene.getObjectByName(meshID);
+        const jumpHeight = 2;
+        const jumpDuration = 0.6;
         
-        ...CLICK_SQUASH,
-        duration: jumpDuration * 0.2,
-        ease: "power2.out",
-    });
-    // Stretch upward
-    tl.to(mesh.scale, {
-        ...CLICK_STRETCH,
-        duration: jumpDuration * 0.2,
-        ease: "power2.out",
-    });
 
-    // Jump up
-    tl.to(mesh.position, {
-        y: `+=${Math.abs(jumpHeight)}`,
-        duration: jumpDuration * 0.4,
-        ease: "power2.out",
-    }, "<");
-    // Landing squash
-    tl.to(mesh.scale, {
-        ...CLICK_LAND,
-        duration: jumpDuration * 0.15,
-        ease: "power2.in",
-    });
+        const originalScale = { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z}
+        // --- Kill old tweens and reset scale/position ---
+        gsap.killTweensOf(mesh.scale);
+        gsap.killTweensOf(mesh.position);
+        const tl = gsap.timeline({
+            onComplete: () => {
+                isJumping = false;
+            }
+        })
 
-    // Bounce back to normal
-    tl.to(mesh.scale, {
-        x: originalScale.x, y: originalScale.y, z: originalScale.z,
-        duration: jumpDuration * 0.25,
-        ease: "elastic.out(1, 0.3)",
-    });
+        // Takeoff squash
+        tl.to(mesh.scale, {
+            
+            ...CLICK_SQUASH/2,
+            duration: jumpDuration * 0.3,
+            ease: "power2.out",
+        });
+        // Stretch upward
+        tl.to(mesh.scale, {
+            ...CLICK_STRETCH/2,
+            duration: jumpDuration * 0.2,
+            ease: "power2.out",
+        });
 
-    // Return to ground
-    tl.to(mesh.position, {
-        y: `-=${Math.abs(jumpHeight)}`,
-        duration: jumpDuration * 0.4,
-        ease: "bounce.out",
-    }, "<");
+        // Jump up
+        tl.to(mesh.position, {
+            y: `+=${Math.abs(jumpHeight)}`,
+            duration: jumpDuration * 0.4,
+            ease: "power2.out",
+        }, "<");
+        // Landing squash
+        tl.to(mesh.scale, {
+            ...CLICK_LAND/2,
+            duration: jumpDuration * 0.3,
+            ease: "power2.in",
+        });
 
+        // Bounce back to normal
+        tl.to(mesh.scale, {
+            x: originalScale.x, y: originalScale.y, z: originalScale.z,
+            duration: jumpDuration * 0.25,
+            ease: "elastic.out(1, 0.3)",
+        });
+
+        // Return to ground
+        tl.to(mesh.position, {
+            y: `-=${Math.abs(jumpHeight)}`,
+            duration: jumpDuration * 0.4,
+            ease: "bounce.out",
+        }, "<");
+    }
 }
-
-
-
-
 
 // --- Squash & Stretch Settings ---
 const TAKEOFF_SQUASH = {x: 1.1, y: 0.9, z: 1.1};
-const TAKEOFF_STRETCH = {x: .9, y: 1.2, z: .9};
+const TAKEOFF_STRETCH = {x: .9, y: 1.1, z: .9};
 const LANDING_SQUASH = {x: 1.1, y: .98, z: 1.1};
 
 function playerCollisions() {
@@ -424,7 +453,6 @@ function playerCollisions() {
     }
 }
 
-
 // Track pressed keys
 const keyStates = {};
 let activeKey = null;          // the single movement key being honored
@@ -434,7 +462,10 @@ const HOP_COOLDOWN = 300;      // ms between hops
 // --- Input events ---
 function onKeyDown(event) {
     const key = event.key.toLowerCase();
-
+    if(event.key === "r"){
+        respawnCharacter()
+        return;
+    }
     // If we already have an active key, ignore others (no diagonals)
     if (!activeKey) {
         activeKey = key;
@@ -455,6 +486,10 @@ function onKeyUp(event) {
 function updatePlayer() {
     if (!character.instance) return;
 
+    if (character.instance.position.y < -20){
+        respawnCharacter();
+        return;
+    }
     // Gravity
     if (!playerOnFloor) {
         playerVelocity.y -= GRAVITY * 0.01;
@@ -504,17 +539,17 @@ function updatePlayer() {
         const tl = gsap.timeline();
         tl.to(character.instance.scale, {
             ...TAKEOFF_SQUASH,
-            duration: 0.1,
+            duration: 0.05,
             ease: "power2.out",
         })
         .to(character.instance.scale, {
             ...TAKEOFF_STRETCH,
-            duration: 0.2,
+            duration: 0.1,
             ease: "power2.out",
         })
         .to(character.instance.scale, {
             x: 1, y: 1, z: 1,
-            duration: 0.3,
+            duration: 0.15,
             ease: "bounce.out",
         });
 
@@ -524,6 +559,13 @@ function updatePlayer() {
     playerCollider.translate(playerVelocity.clone().multiplyScalar(0.01));
     playerCollisions();
 
+    let rotationDiff =
+        ((((targetRotation - character.instance.rotation.y) % (2 * Math.PI)) +
+        3 * Math.PI) %
+        (2 * Math.PI)) -
+        Math.PI;
+    let finalRotation = character.instance.rotation.y + rotationDiff;
+
     // Update instance position
     character.instance.position.copy(playerCollider.start);
     character.instance.position.y -= CAPSULE_RADIUS;
@@ -531,8 +573,8 @@ function updatePlayer() {
     // Smooth rotation
     character.instance.rotation.y = THREE.MathUtils.lerp(
         character.instance.rotation.y,
-        targetRotation,
-        0.1
+        finalRotation,
+        0.3
     );
 }
 
@@ -552,6 +594,25 @@ window.addEventListener("keydown", onKeyDown);
 // animation
 function animate() {
     updatePlayer();
+    console.log(camera.position, camera.zoom);
+    if(character.instance){
+        camera.lookAt(character.instance.position);
+    }
+    if(character.instance){
+        camera.lookAt(character.instance.position);
+        const targetCameraPosition = new THREE.Vector3(
+            character.instance.position.x + cameraOffset.x + 20,
+            cameraOffset.y + 10,
+            character.instance.position.z + cameraOffset.z + 20,
+        );
+        camera.position.copy(targetCameraPosition);
+        // camera.lookAt(
+        //     character.instance.position.x, 
+        //     camera.position.y - 24,
+        //     character.instance.position.z,
+        // );
+    }
+    
     // update the picking ray with the camera and pointer position
 	raycaster.setFromCamera( pointer, camera );
 
@@ -569,7 +630,7 @@ function animate() {
 	for ( let i = 0; i < intersects.length; i ++ ) {
         intersectObject = intersects[0].object.parent.name;
 	}
-    debugCapsule(playerCollider, scene);
+    //debugCapsule(playerCollider, scene);
 	renderer.render( scene, camera );
 }
 
