@@ -33,6 +33,7 @@ let targetRotation = 0;
 let playerVelocity = new THREE.Vector3();
 let playerOnFloor = false;
 let isJumping = false;
+let controlEnabled = true;
 
 const colliderOctree = new Octree();
 
@@ -66,6 +67,7 @@ const modalExitButton = document.querySelector(".modal-exit-button");
 const modalVisitProjectButton = document.querySelector(".modal-project-visit-button");
 
 function showModal(id){
+    controlEnabled = false;
     const content = modalContent[id];
     if(content){
         modalTitle.textContent = content.title;
@@ -73,6 +75,8 @@ function showModal(id){
         
         if(content.link){
             modalVisitProjectButton.href = content.link;
+            modalVisitProjectButton.target = "_blank";
+            modalVisitProjectButton.rel = "noopener noreferrer";
             modalVisitProjectButton.classList.remove("hidden");
         } else{
             modalVisitProjectButton.classList.add("hidden");
@@ -82,6 +86,7 @@ function showModal(id){
 }
 
 function hideModal(){
+    controlEnabled = true;
     modal.classList.toggle("hidden");
 }
 
@@ -326,7 +331,13 @@ function onPointerMove( event ) {
 
 }
 
-function onClick(){
+function onClick(event){
+    console.log("Clicked Element:", event.target);
+    console.log("Is inside modal?", modal.contains(event.target));
+
+    if (modal.contains(event.target)) {
+        return;
+    }
     if(intersectObject !== ""){
         if (!isJumping && ["Miso","ProjectsSign","MainParkSignGroup"].includes(intersectObject)){
             jumpCharacter(intersectObject);
@@ -464,6 +475,7 @@ const HOP_COOLDOWN = 300;      // ms between hops
 
 // --- Input events ---
 function onKeyDown(event) {
+    if(!controlEnabled) return;
     const key = event.key.toLowerCase();
     if(event.key === "r"){
         respawnCharacter()
@@ -593,7 +605,6 @@ modalExitButton.addEventListener("click", hideModal);
 window.addEventListener("resize", onResize);
 window.addEventListener("click", onClick);
 window.addEventListener("pointermove", onPointerMove);
-window.addEventListener("keydown", onKeyDown);
 // animation
 function animate() {
     const delta = clock.getDelta();
