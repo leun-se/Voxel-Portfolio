@@ -338,6 +338,8 @@ function onClick(){
 }
 
 function respawnCharacter(){
+    // Reset the character's downward momentum
+    playerVelocity.set(0, 0, 0);
     character.instance.position.copy(character.spawnPosition);
 
     playerCollider.start
