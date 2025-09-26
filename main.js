@@ -20,7 +20,7 @@ const clock = new THREE.Clock();
 const GRAVITY = 40;
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HEIGHT = 1;
-const JUMP_HEIGHT = 11;
+const HOP_HEIGHT = 9;
 const MOVE_SPEED = 3;
 
 let character = {
@@ -33,7 +33,7 @@ let targetRotation = 0;
 let playerVelocity = new THREE.Vector3();
 let playerOnFloor = false;
 let isJumping = false;
-let controlEnabled = true;
+let isModalOpen = false;
 
 const colliderOctree = new Octree();
 
@@ -67,7 +67,9 @@ const modalExitButton = document.querySelector(".modal-exit-button");
 const modalVisitProjectButton = document.querySelector(".modal-project-visit-button");
 
 function showModal(id){
-    controlEnabled = false;
+    isModalOpen = true;
+    modal.classList.remove("hidden");
+
     const content = modalContent[id];
     if(content){
         modalTitle.textContent = content.title;
@@ -86,7 +88,7 @@ function showModal(id){
 }
 
 function hideModal(){
-    controlEnabled = true;
+    isModalOpen = false;
     modal.classList.toggle("hidden");
 }
 
@@ -332,20 +334,22 @@ function onPointerMove( event ) {
 }
 
 function onClick(event){
-    console.log("Clicked Element:", event.target);
-    console.log("Is inside modal?", modal.contains(event.target));
-
-    if (modal.contains(event.target)) {
+    if (isModalOpen && !modal.contains(event.target)){
+        hideModal();
         return;
     }
-    if(intersectObject !== ""){
+    if (isModalOpen) {
+        return;
+    }
+    if (!isModalOpen && intersectObject !== ""){
         if (!isJumping && ["Miso","ProjectsSign","MainParkSignGroup"].includes(intersectObject)){
             jumpCharacter(intersectObject);
         }else{
-            showModal(intersectObject);
+            if(modalContent[intersectObject]){
+                showModal(intersectObject);
+            }
         }
     }
-    //console.log(intersectObject);
 }
 
 function respawnCharacter(){
@@ -440,29 +444,21 @@ function playerCollisions() {
         playerOnFloor = result.normal.y > 0;
         playerCollider.translate(result.normal.multiplyScalar(result.depth));
 
-        if (playerOnFloor) {
-            character.isMoving = false;
-            playerVelocity.x = 0;
-            playerVelocity.z = 0;
+        if (playerOnFloor && !wasOnFloor) {
+            gsap.killTweensOf(character.instance.scale);
+            character.instance.scale.set(1,1,1);
 
-            // --- NEW: landing squash ---
-            if (!wasOnFloor) {
-                // --- Landing squash ---
-                gsap.killTweensOf(character.instance.scale);
-                character.instance.scale.set(1, 1, 1);
-
-                const tl = gsap.timeline();
-                tl.to(character.instance.scale, {
-                    ...LANDING_SQUASH,
-                    duration: 0.1,
-                    ease: "power2.in",
-                })
-                .to(character.instance.scale, {
-                    x: 1, y: 1, z: 1,
-                    duration: 0.2,
-                    ease: "bounce.out",
-                });
-            }
+            const tl = gsap.timeline();
+            tl.to(character.instance.scale, {
+                ...LANDING_SQUASH,
+                duration: 0.1,
+                ease: "power2.in",
+            })
+            .to(character.instance.scale, {
+                x: 1, y: 1, z: 1,
+                duration: 0.2,
+                ease: "bounce.out",
+            });
         }
     }
 }
@@ -475,16 +471,12 @@ const HOP_COOLDOWN = 300;      // ms between hops
 
 // --- Input events ---
 function onKeyDown(event) {
-    if(!controlEnabled) return;
+    if (isModalOpen) return;
     const key = event.key.toLowerCase();
-    if(event.key === "r"){
-        respawnCharacter()
-        return;
-    }
-    // If we already have an active key, ignore others (no diagonals)
-    if (!activeKey) {
-        activeKey = key;
-        keyStates[key] = true;
+    keyStates[key] = true;
+
+    if(key === "r"){
+        respawnCharacter();
     }
 }
 
@@ -499,98 +491,81 @@ function onKeyUp(event) {
 }
 
 function updatePlayer(delta) {
-    if (!character.instance) return;
+    if (!character.instance || isModalOpen) return;
 
     if (character.instance.position.y < -20){
         respawnCharacter();
         return;
+    }
+
+    const moveSpeed = MOVE_SPEED * 2;
+    const damping = 0.9;
+    const now = performance.now();
+
+    playerVelocity.x *= damping;
+    playerVelocity.z *= damping;
+
+    const forward = keyStates['w'] || keyStates['arrowup'];
+    const backward = keyStates['s'] || keyStates['arrowdown'];
+    const left = keyStates['a'] || keyStates['arrowleft'];
+    const right = keyStates['d'] || keyStates['arrowright'];
+
+    const direction = new THREE.Vector3();
+    if (forward) direction.z += 1;
+    if (backward) direction.z -= 1;
+    if (left) direction.x += 1;
+    if (right) direction.x -= 1;
+
+    //normalize vector to prevent faster diagonal movement
+    if (direction.length() > 0){
+        direction.normalize();
+
+        playerVelocity.x = direction.x * moveSpeed;
+        playerVelocity.z = direction.z * moveSpeed;
+
+        targetRotation = Math.atan2(direction.x, direction.z);
+
+        if (playerOnFloor && now - lastHopTime > HOP_COOLDOWN){
+            playerVelocity.y = HOP_HEIGHT;
+            lastHopTime = now;
+
+            gsap.killTweensOf(character.instance.scale);
+            const t1 = gsap.timeline();
+            t1.to(character.instance.scale,{
+                x: 1.1, y: 0.9, z: 1.1, // TAKEOFF_SQUASH
+                duration: 0.05,
+                ease: "power2.out", 
+            })
+            .to(character.instance.scale, {
+                x: 0.9, y: 1.1, z: 0.9, // TAKEOFF_STRETCH
+                duration: 0.1,
+                ease: "power2.out",
+            })
+            .to(character.instance.scale, {
+                x: 1, y: 1, z: 1,
+                duration: 0.15,
+                ease: "bounce.out",
+            });
+        }
     }
     // Gravity
     if (!playerOnFloor) {
         playerVelocity.y -= GRAVITY * delta;
     }
 
-    const now = performance.now();
-
-    // If on floor and cooldown passed → set new hop direction
-    if (activeKey && playerOnFloor && now - lastHopTime > HOP_COOLDOWN) {
-        const moveDist = MOVE_SPEED;
-
-        // Reset old horizontal velocity only when starting a new hop
-        playerVelocity.x = 0;
-        playerVelocity.z = 0;
-
-        switch (activeKey) {
-            case "w":
-            case "arrowup":
-                playerVelocity.z += moveDist;
-                targetRotation = 0;
-                break;
-            case "s":
-            case "arrowdown":
-                playerVelocity.z -= moveDist;
-                targetRotation = Math.PI;
-                break;
-            case "a":
-            case "arrowleft":
-                playerVelocity.x += moveDist;
-                targetRotation = Math.PI / 2;
-                break;
-            case "d":
-            case "arrowright":
-                playerVelocity.x -= moveDist;
-                targetRotation = -Math.PI / 2;
-                break;
-        }
-
-        // hop upward
-        playerVelocity.y = JUMP_HEIGHT;
-        lastHopTime = now;
-
-        // --- Takeoff squash & stretch ---
-        gsap.killTweensOf(character.instance.scale);
-        character.instance.scale.set(1, 1, 1);
-
-        const tl = gsap.timeline();
-        tl.to(character.instance.scale, {
-            ...TAKEOFF_SQUASH,
-            duration: 0.05,
-            ease: "power2.out",
-        })
-        .to(character.instance.scale, {
-            ...TAKEOFF_STRETCH,
-            duration: 0.1,
-            ease: "power2.out",
-        })
-        .to(character.instance.scale, {
-            x: 1, y: 1, z: 1,
-            duration: 0.15,
-            ease: "bounce.out",
-        });
-
-    }
-
-    // Apply velocity
     playerCollider.translate(playerVelocity.clone().multiplyScalar(delta));
     playerCollisions();
 
-    let rotationDiff =
-        ((((targetRotation - character.instance.rotation.y) % (2 * Math.PI)) +
-        3 * Math.PI) %
-        (2 * Math.PI)) -
-        Math.PI;
-    let finalRotation = character.instance.rotation.y + rotationDiff;
-
-    // Update instance position
+    //update visuals
     character.instance.position.copy(playerCollider.start);
     character.instance.position.y -= CAPSULE_RADIUS;
 
-    // Smooth rotation
-    character.instance.rotation.y = THREE.MathUtils.lerp(
-        character.instance.rotation.y,
-        finalRotation,
-        0.3
-    );
+    //rotation logic
+    let rotationDiff = targetRotation - character.instance.rotation.y;
+    while(rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
+    while(rotationDiff < -Math.PI) rotationDiff += 2 * Math.PI;
+
+    character.instance.rotation.y += rotationDiff * 0.2;
 }
 
 
