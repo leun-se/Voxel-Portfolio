@@ -4,7 +4,18 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {Octree} from 'three/addons/math/Octree.js';
 import {Capsule} from "three/addons/math/Capsule.js";
 
-
+const loadingScreen = document.getElementById('loading-screen');
+const loadingManager = new THREE.LoadingManager();
+loadingManager.onLoad = () => {
+    console.log("Scene is fuly loaded.");
+    gsap.to(loadingScreen,{
+        opacity: 0,
+        duration: .2,
+        onComplete: () => {
+            loadingScreen.style.display = 'none';
+        }
+    });
+};
 
 const sizes = {
     width: window.innerWidth,
@@ -66,6 +77,10 @@ const modalProjectDescription = document.querySelector(".modal-project-descripti
 const modalExitButton = document.querySelector(".modal-exit-button");
 const modalVisitProjectButton = document.querySelector(".modal-project-visit-button");
 
+const uiOverlay = document.querySelector('.ui-overlay');
+let isUiVisible = true;
+let lastMoveTime = performance.now();
+
 function showModal(id){
     isModalOpen = true;
     modal.classList.remove("hidden");
@@ -109,7 +124,7 @@ const aspect = sizes.width / sizes.height;
 const camera = new THREE.OrthographicCamera( -aspect * 50, aspect * 50, 50, -50, 1, 1000);
 const scene = new THREE.Scene();
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader(loadingManager);
 
 //loading model
 loader.load( "./first3jsproject.glb", function ( glb ) {
@@ -146,12 +161,12 @@ loader.load( "./first3jsproject.glb", function ( glb ) {
             colliderOctree.fromGraphNode(child);
         }
     })
-     // 3) Build pivoted groups (no extra scene.add needed inside your code now)
+
     const characterGroup = groupMeshesPivoted(scene, characterMeshes, "CharacterGroup");
     const fountainGroup  = groupMeshesPivoted(scene, fountainMeshes, "FountainGroup");
     const mainParkSignGroup = groupMeshesPivoted(scene, mainParkMeshes, "MainParkSignGroup" );
 
-    // 4) Raycasting: add meshes inside the groups
+    //raycasting objects into groups
     if (intersectObjectsNames.includes("CharacterGroup")) {
         characterGroup.traverse(c => c.isMesh && intersectObjects.push(c));
         playerCollider.start
@@ -168,7 +183,7 @@ loader.load( "./first3jsproject.glb", function ( glb ) {
         mainParkSignGroup.traverse(c => c.isMesh && intersectObjects.push(c));
     }
 
-    // 5) Use the pivot as the character instance
+    //Use the pivot as the character instance
     character.instance = characterGroup;
     character.spawnPosition.copy(character.instance.position);
     playerCollider.start
@@ -199,19 +214,9 @@ sun.shadow.radius = 30;
 scene.add( sun );
 
 
-//hemisphere light/helper
+
 const HemisphereLight = new THREE.HemisphereLight( 0xffffbb, 0x0099FF, 3 );
 scene.add( HemisphereLight );
-// const HemisphereLightHelper = new THREE.HemisphereLightHelper( HemisphereLight, 5 );
-// scene.add( HemisphereLightHelper );
-
-// const shadowHelper = new THREE.CameraHelper( sun.shadow.camera );
-// scene.add( shadowHelper );
-//const helper = new THREE.DirectionalLightHelper( sun, 5 );
-//scene.add( helper );
-
-// const light = new THREE.AmbientLight( 0x87CEEB, 0 ); // soft white light
-// scene.add( light );
 
 const renderer = new THREE.WebGLRenderer( { canvas: canvas, antialias: true } );
 renderer.setSize( sizes.width, sizes.height );
@@ -516,10 +521,23 @@ function updatePlayer(delta) {
     if (left) direction.x += 1;
     if (right) direction.x -= 1;
 
+    //UI fade logic
+    if(direction.length() > 0) {
+        lastMoveTime = now;
+        if (isUiVisible){
+            isUiVisible = false;
+            gsap.to(uiOverlay, {opacity: 0, duration: 0.5});
+        }
+    } else {
+        if(now - lastMoveTime > 2000 && !isUiVisible){
+            isUiVisible = true;
+            gsap.to(uiOverlay, {opacity: 1, duration: 0.5 });
+        }
+    }
+
     //normalize vector to prevent faster diagonal movement
     if (direction.length() > 0){
         direction.normalize();
-
         playerVelocity.x = direction.x * moveSpeed;
         playerVelocity.z = direction.z * moveSpeed;
 
