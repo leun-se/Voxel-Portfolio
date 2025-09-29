@@ -83,7 +83,7 @@ let lastMoveTime = performance.now();
 
 function showModal(id){
     isModalOpen = true;
-    modal.classList.remove("hidden");
+    modal.classList.remove("hidden"); // This line makes it visible.
 
     const content = modalContent[id];
     if(content){
@@ -98,13 +98,12 @@ function showModal(id){
         } else{
             modalVisitProjectButton.classList.add("hidden");
         }
-        modal.classList.toggle("hidden");
     }
 }
 
 function hideModal(){
     isModalOpen = false;
-    modal.classList.toggle("hidden");
+    modal.classList.add("hidden"); // Use .add() to reliably hide the modal.
 }
 
 let intersectObject = "";
@@ -396,13 +395,13 @@ function jumpCharacter(meshID) {
         tl.to(mesh.scale, {
             
             ...CLICK_SQUASH/2,
-            duration: jumpDuration * 0.3,
+            duration: jumpDuration * 0.1,
             ease: "power2.out",
         });
         // Stretch upward
         tl.to(mesh.scale, {
             ...CLICK_STRETCH/2,
-            duration: jumpDuration * 0.2,
+            duration: jumpDuration * 0.15,
             ease: "power2.out",
         });
 
@@ -529,7 +528,7 @@ function updatePlayer(delta) {
             gsap.to(uiOverlay, {opacity: 0, duration: 0.5});
         }
     } else {
-        if(now - lastMoveTime > 2000 && !isUiVisible){
+        if(now - lastMoveTime > 1300 && !isUiVisible){
             isUiVisible = true;
             gsap.to(uiOverlay, {opacity: 1, duration: 0.5 });
         }
@@ -600,7 +599,12 @@ window.addEventListener("click", onClick);
 window.addEventListener("pointermove", onPointerMove);
 // animation
 function animate() {
-    const delta = clock.getDelta();
+    let delta = clock.getDelta();
+
+    //cap delta time in case of timeskips 
+    if(delta > 0.1){
+        delta = 0.1;
+    }
 
     updatePlayer(delta);
     //console.log(camera.position, camera.zoom);
