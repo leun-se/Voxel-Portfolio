@@ -76,6 +76,9 @@ const modalProjectDescription = document.querySelector(".modal-project-descripti
 
 const modalExitButton = document.querySelector(".modal-exit-button");
 const modalVisitProjectButton = document.querySelector(".modal-project-visit-button");
+const dayNightButton = document.querySelector('.day-night-button')
+
+let isNight = false;
 
 const uiOverlay = document.querySelector('.ui-overlay');
 let isUiVisible = true;
@@ -122,6 +125,7 @@ const canvas = document.getElementById("experience-canvas");
 const aspect = sizes.width / sizes.height;
 const camera = new THREE.OrthographicCamera( -aspect * 50, aspect * 50, 50, -50, 1, 1000);
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
 
 const loader = new GLTFLoader(loadingManager);
 
@@ -469,13 +473,14 @@ function playerCollisions() {
 
 // Track pressed keys
 const keyStates = {};
-let activeKey = null;          // the single movement key being honored
 let lastHopTime = 0;           // cooldown
 const HOP_COOLDOWN = 300;      // ms between hops
 
-// --- Input events ---
+//Input Functions
+
 function onKeyDown(event) {
     if (isModalOpen) return;
+    
     const key = event.key.toLowerCase();
     keyStates[key] = true;
 
@@ -487,11 +492,6 @@ function onKeyDown(event) {
 function onKeyUp(event) {
     const key = event.key.toLowerCase();
     keyStates[key] = false;
-
-    // Release active key if lifted
-    if (key === activeKey) {
-        activeKey = null;
-    }
 }
 
 function updatePlayer(delta) {
@@ -585,9 +585,51 @@ function updatePlayer(delta) {
     character.instance.rotation.y += rotationDiff * 0.2;
 }
 
+const daySkyColor = new THREE.Color(0xffffbb);
+const nightSkyColor = new THREE.Color(0x2e4482);
+
+const sunColorDay = new THREE.Color(0xFFE484);
+const sunColorNight = new THREE.Color(0xaaccff);
+function toggleDayNight() {
+    const icon = dayNightButton.querySelector('i');
+    const duration = 1.5;
+
+    if (isNight) {
+        const ease = "power2.out";
+        // --- Transition to DAY ---
+        dayNightButton.classList.remove('night-mode'); // Let CSS handle the colors
+        icon.classList.remove('fa-moon');
+        icon.classList.add('fa-sun');
+        
+        gsap.to(sun, { intensity: 6, duration: duration, ease: ease });
+        gsap.to(sun.color, { r: sunColorDay.r, g: sunColorDay.g, b: sunColorDay.b, duration: duration, ease: ease });
+
+        gsap.to(HemisphereLight, { intensity: 3, duration: duration, ease: ease});
+        gsap.to(HemisphereLight.color, { r: daySkyColor.r, g: daySkyColor.g, b: daySkyColor.b, duration: duration, ease: ease });
+        gsap.to(scene.background, { r: 0.52, g: 0.80, b: 0.92, duration: duration, ease: ease});
+
+    } else {
+        const ease = "power2.out";
+        // --- Transition to NIGHT ---
+        dayNightButton.classList.add('night-mode'); // Let CSS handle the colors
+        icon.classList.remove('fa-sun');
+        icon.classList.add('fa-moon');
+
+        // Animate scene
+        gsap.to(sun, { intensity: 3, duration: duration, ease: ease });
+        gsap.to(sun.color, { r: sunColorNight.r, g: sunColorNight.g, b: sunColorNight.b, duration: duration, ease: ease });
+
+        gsap.to(HemisphereLight, { intensity: 2, duration: duration, ease: ease});
+        gsap.to(HemisphereLight.color, { r: nightSkyColor.r, g: nightSkyColor.g, b: nightSkyColor.b, duration: duration, ease: ease });
+        gsap.to(scene.background, { r: 0.5, g: 0.5, b: 0.8, duration: duration, ease: ease });
+    }
+
+    isNight = !isNight;
+}
 
 
 // --- Listeners ---
+dayNightButton.addEventListener('click', toggleDayNight)
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("keyup", onKeyUp);
 
