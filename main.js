@@ -106,7 +106,12 @@ function showModal(id){
 
 function hideModal(){
     isModalOpen = false;
-    modal.classList.add("hidden"); // Use .add() to reliably hide the modal.
+    modal.classList.add("hidden");
+    // Explicitly nullify the link to tell the browser you're done with it
+    modalVisitProjectButton.href = ""; 
+    
+    // This can sometimes trigger the browser's Garbage Collector sooner
+    window.gc && window.gc();
 }
 
 let intersectObject = "";
