@@ -1,103 +1,253 @@
-*{
+* {
     padding: 0;
     margin: 0;
     box-sizing: border-box;
     font-family: "Pixelify Sans", sans-serif;
 }
 
+:root {
+    --modal-gap: 24px;   /* breathing room between the modal and the screen edge */
+    --clay: #bd8b6d;
+    --cream: #ede1da;
+    --sun: #ffe484;
+    --clay-dark: #d39e59;
+    --night: #546bab;
+    --night-dark: #131862;
+}
+
 /* experience */
-#experience{
+#experience {
     position: fixed;
-    height: 100%;
-    width: 100%;
-    top: 0;
-    left: 0;
+    inset: 0;
     overflow: hidden;
 }
 
 #experience-canvas {
     width: 100%;
     height: 100%;
+    display: block;
 }
 
-/* Utilities */
-.hidden{
+/* utilities */
+.hidden {
     display: none;
-} 
+}
 
-/* modal */
+/* .hidden and .modal have equal specificity, so whichever comes last in this
+ * file would win. Two classes beats one, so this holds no matter the order. */
+.modal.hidden {
+    display: none;
+}
+
+/* ---------------- modal ---------------- */
 .modal {
     z-index: 1000;
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 100%;
+    width: calc(100% - 2 * var(--modal-gap));
     max-width: 700px;
-    background-color: #bd8b6d ;
-    border: 2px solid #ede1da;
-    color: #ede1da;
-}
-.modal-wrapper{
-    padding: 12px;
+    /* never taller than the screen, minus the gap on both edges.
+     * dvh overrides vh where supported - it accounts for mobile browser bars. */
+    max-height: calc(100vh - 2 * var(--modal-gap));
+    max-height: calc(100dvh - 2 * var(--modal-gap));
+    display: flex;
+    background-color: var(--clay);
+    border: 2px solid var(--cream);
+    color: var(--cream);
 }
 
-.modal-header{
-    width: 100%;
+.modal-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    /* without min-height:0 a flex child refuses to shrink below its content,
+     * and the scrollbar never appears */
+    min-height: 0;
+    min-width: 0;
+}
+
+.modal-header {
+    flex: 0 0 auto;
     display: flex;
     flex-direction: row;
     justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
 }
 
+.modal-title {
+    font-size: 1.75rem;
+    line-height: 1.1;
+}
+
+.modal-exit-button {
+    flex-shrink: 0;
+    background: none;
+    border: 2px solid var(--cream);
+    color: var(--cream);
+    padding: 4px 12px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.modal-exit-button:hover,
+.modal-exit-button:focus-visible {
+    background-color: var(--cream);
+    color: var(--clay);
+    outline: none;
+}
+
+/* generated contents - the one scrolling region */
+.modal-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--cream) transparent;
+}
+
+.modal-body::-webkit-scrollbar {
+    width: 10px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: var(--cream);
+    border: 2px solid var(--clay);
+}
+
+.modal-subtitle {
+    font-size: 0.9rem;
+    opacity: 0.85;
+}
+
+.modal-image {
+    width: 100%;
+    flex: 0 0 auto;
+    max-height: 260px;
+    object-fit: cover;
+    border: 2px solid var(--cream);
+}
+
+.modal-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.modal-tag {
+    border: 1px solid var(--cream);
+    padding: 1px 8px;
+    font-size: 0.8rem;
+}
+
+.modal-gallery {
+    display: grid;
+    /* 1 column on a phone, 2-3 on a laptop, no media query needed */
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.modal-shot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.modal-shot img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    /* `cover` keeps the grid tidy but crops. Switch to `contain` if a
+     * screenshot is losing something important at the edges. */
+    object-fit: cover;
+    border: 2px solid var(--cream);
+}
+
+.modal-shot figcaption {
+    font-size: 0.75rem;
+    opacity: 0.85;
+    line-height: 1.3;
+}
+
+.modal-project-description {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    line-height: 1.5;
+    max-width: 62ch;
+}
+
+.modal-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.modal-project-visit-button {
+    border: 2px solid var(--cream);
+    padding: 6px 14px;
+    color: var(--cream);
+    text-decoration: none;
+}
+
+.modal-project-visit-button:hover,
+.modal-project-visit-button:focus-visible {
+    background-color: var(--cream);
+    color: var(--clay);
+    outline: none;
+}
+
+/* ---------------- overlays ---------------- */
 .ui-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    /*stacking*/
+    inset: 0;
     z-index: 10;
-
-    /*click-through behavior */
     pointer-events: none;
-
-    color: #ede1da;
+    color: var(--cream);
     padding: 30px;
     opacity: 1;
-    transition: opacity 0.5s ease-in-out;
 }
 
-/*re-enable clicks for direct child elements inside the overlay */
-.ui-overlay > * {
-    pointer-events: auto;
+.ui-overlay h2 {
+    font-size: 1.25rem;
+    margin-bottom: 4px;
 }
+
+.ui-overlay ul {
+    list-style: none;
+    font-size: 0.95rem;
+}
+
 #loading-screen {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #FFE484;
+    inset: 0;
+    background-color: var(--sun);
     z-index: 1001;
     display: flex;
     justify-content: center;
     align-items: center;
     color: white;
     font-size: 2em;
-    transition: opacity 1s ease;
 }
 
-.loading-text{
-    font-family: "Pixelify Sans", sans-serif;
-}
-
-#toggle-buttons{
+#toggle-buttons {
     position: fixed;
     top: 30px;
     right: 30px;
     z-index: 20;
-
-    display:flex;
+    display: flex;
     flex-direction: row;
     gap: 10px;
 }
@@ -105,47 +255,45 @@
 .day-night-button {
     width: 40px;
     height: 40px;
-    justify-content: center;
     border: none;
     border-radius: 8px;
-    padding: 12px 15px;
     font-size: 16px;
     cursor: pointer;
     box-shadow: 0 4px 6px rgba(71, 51, 21, 0.1);
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    
-    /* Day Mode (default) styles */
-    background-color: #FFE484;
+    justify-content: center;
+    background-color: var(--sun);
     color: #ffffff;
-    transition: background-color 0.3s ease; /* Keep the transition */
+    transition: background-color 0.3s ease;
 }
 
-/* Add this to remove the default outline and add a custom focus style */
-.day-night-button:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(211, 158, 89, 0.7); /* A soft, yellow glow */
-}
-
-.day-night-button.night-mode:focus{
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(19, 24, 98, 0.7);
-}
-
-/* Day Mode Hover */
 .day-night-button:hover {
-    background-color: #d39e59;
+    background-color: var(--clay-dark);
 }
 
-/* Night Mode styles */
+.day-night-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(211, 158, 89, 0.7);
+}
+
 .day-night-button.night-mode {
-    background-color: #546bab;
+    background-color: var(--night);
     color: #ffffffa8;
 }
 
-
-/* Night Mode Hover */
 .day-night-button.night-mode:hover {
-    background-color: #131862;
+    background-color: var(--night-dark);
+}
+
+.day-night-button.night-mode:focus-visible {
+    box-shadow: 0 0 0 3px rgba(19, 24, 98, 0.7);
+}
+
+@media (max-width: 600px) {
+    :root { --modal-gap: 14px; }
+    .modal-title { font-size: 1.4rem; }
+    .modal-image { max-height: 180px; }
+    .ui-overlay { padding: 20px; }
+    #toggle-buttons { top: 20px; right: 20px; }
 }
