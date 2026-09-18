@@ -236,12 +236,13 @@ export const projects = {
             title: "Market Miner",
             subtitle: "Aug 2025 – Sep 2025 · Data pipeline",
             tags: ["Python", "Scrapy", "Playwright", "MongoDB"],
-            body: `A scraping pipeline for JavaScript-heavy marketplaces including
-Facebook Marketplace, Amazon and Airbnb, automating infinite scroll and dynamic
-rendering to capture complete listings.
-
-Extraction and cleaning workflows structure the product data into MongoDB, with
-reusable item models and configurable settings so new marketplaces drop in.`,
+            body: `There's no UI for this one; it all runs in the terminal. A scraping pipeline for JavaScript-heavy marketplaces. I built it to
+            help my brother pull fish auction listings, then expanded it to handle other 
+            platforms like Nike. The tutorial I started from used only Scrapy, which works 
+            fine on static pages but returns nothing when content loads via JavaScript — 
+            so I added Playwright to render pages before parsing them. Bot detection was 
+            the harder problem. Mimicking user scrolling got me past some sites; others I 
+            couldn't crack, including with hosted crawlers. `,
             // links: [["View project", "https://"]],
         },
     },
@@ -258,11 +259,14 @@ reusable item models and configurable settings so new marketplaces drop in.`,
                 ["./images/KennyJam/E1.png"],
                 ["./images/KennyJam/E1.png"],
             ],
-            body: `A first-person escape game built in 48 hours, using only assets
-from the Kenney library.
-
-You wake up in a research facility after hours and have to find the exit before
-security finishes its round.`,
+            body: `My girlfriend and I made this at our first game jam — 48 hours, theme 
+            was "Power." It was fun coming up with ideas and seeing how many ways you could 
+            read the theme. We eventually landed on superpowers, with a protagonist who can 
+            mind control, and that turned into Escape the Facility, a first-person escape 
+            game where you take over the other superhuman inmates and use their abilities to
+            get out. All the art is from the Kenney library. I was in Taiwan for the summer 
+            and she was in the States, so we built the whole thing over a 12-hour time difference, 
+            which was an interesting way to work.`,
             links: [
                 ["Play on itch.io", "https://leun-se.itch.io/escape-from-the-facility"],
             ],
